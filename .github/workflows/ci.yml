@@ -36,6 +36,8 @@ jobs:
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 22
+          # setup-node v6 only auto-caches for npm; pnpm must opt in explicitly.
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
