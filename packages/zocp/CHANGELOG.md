@@ -2,6 +2,12 @@
 
 All notable changes to `@takazudo/zudo-ogp-check-panel` will be documented here.
 
+## 0.1.2
+
+### Fixed
+
+- Removed the `engines` block (`engines.pnpm` and `engines.node`) from the published manifest. `engines.pnpm` hard-failed pnpm 10 consumers with `ERR_PNPM_UNSUPPORTED_ENGINE` whenever a pnpm command ran against the installed package dir; `engines.node` is dropped too since the library is a zero-dependency browser/DOM utility with no Node API usage. Dev-tooling constraints remain in the private workspace root. ([#15](https://github.com/Takazudo/zudo-ogp-check-panel/issues/15)) (01dfb21)
+
 ## 0.1.1
 
 ### Fixed
