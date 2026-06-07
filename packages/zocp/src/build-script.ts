@@ -1,4 +1,5 @@
 import type { OgpDebugConfig } from './types';
+import { STYLESHEET } from './styles';
 
 const DEFAULTS: Required<OgpDebugConfig> = {
   windowNamespace: 'zocp',
@@ -17,6 +18,7 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
   const c = { ...DEFAULTS, ...config };
 
   const panelId = safeStringify(c.panelId);
+  const styleId = safeStringify(`${c.panelId}-styles`);
   const storageKey = safeStringify(`${c.storageKeyPrefix}-visible`);
   const modeKey = safeStringify(`${c.storageKeyPrefix}-mode`);
   const closeId = safeStringify(`${c.panelId}-close`);
@@ -25,15 +27,20 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
   const accentColor = safeStringify(c.accentColor);
   const ns = safeStringify(c.windowNamespace);
   const reshowEvents = `[${c.reshowEvents.map(safeStringify).join(',')}]`;
+  // Static stylesheet string baked into the IIFE; safeStringify keeps the
+  // </script> breakout protection consistent with every other config string.
+  const stylesheet = safeStringify(STYLESHEET);
 
   return `(function() {
   var PANEL_ID = ${panelId};
+  var STYLE_ID = ${styleId};
   var STORAGE_KEY = ${storageKey};
   var MODE_KEY = ${modeKey};
   var CLOSE_ID = ${closeId};
   var LOCAL_BTN_ID = ${localBtnId};
   var REMOTE_BTN_ID = ${remoteBtnId};
   var ACCENT = ${accentColor};
+  var STYLESHEET = ${stylesheet};
 
   function getMode() {
     try { return localStorage.getItem(MODE_KEY) || 'remote'; } catch(e) { return 'remote'; }
@@ -75,7 +82,22 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
     }
   }
 
+  // Inject the panel stylesheet exactly once. show() re-runs on mode switches,
+  // observer refreshes and reshow re-mounts; the id guard keeps a single
+  // <style> in head. textContent (never innerHTML) means a </style> in the CSS
+  // could never break out. show() always runs before startObserver(), so the
+  // injection lands before the head observer is armed and never triggers it.
+  function injectStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    var styleEl = document.createElement('style');
+    styleEl.id = STYLE_ID;
+    styleEl.textContent = STYLESHEET;
+    document.head.appendChild(styleEl);
+  }
+
   function show() {
+    injectStyles();
+
     var existing = document.getElementById(PANEL_ID);
     if (existing) { existing.remove(); }
 
@@ -95,52 +117,38 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
 
     var panel = document.createElement('div');
     panel.id = PANEL_ID;
+    panel.className = 'zocp-ogp';
     // role="region" (not "dialog"): the panel is non-modal and never moves
     // focus, so the ARIA dialog contract (focus-in / focus-return) wouldn't hold.
     panel.setAttribute('role', 'region');
     panel.setAttribute('aria-label', 'OGP debug panel');
-    panel.style.cssText = [
-      'position:fixed',
-      'bottom:16px',
-      'right:16px',
-      'width:420px',
-      'max-height:80vh',
-      'overflow-y:auto',
-      'background:#1a1a2e',
-      'color:#e0e0e0',
-      'border:1px solid #444',
-      'border-radius:8px',
-      'font-family:system-ui,sans-serif',
-      'font-size:13px',
-      'line-height:1.5',
-      'z-index:99999',
-      'box-shadow:0 4px 24px rgba(0,0,0,0.5)'
-    ].join(';');
+    // Accent is the one genuinely-dynamic style value: configurable per host,
+    // so it stays inline as the --zocp-color-accent token the stylesheet reads.
+    panel.style.setProperty('--zocp-color-accent', ACCENT);
 
-    var btnBase = 'border:none;cursor:pointer;padding:4px 10px;border-radius:4px;font-size:11px;font-family:system-ui,sans-serif';
-    var btnActive = btnBase + ';background:' + ACCENT + ';color:#fff';
-    var btnInactive = btnBase + ';background:#333;color:#888';
+    var localCls = 'zocp-ogp-mode-btn' + (mode === 'local' ? ' is-active' : '');
+    var remoteCls = 'zocp-ogp-mode-btn' + (mode === 'remote' ? ' is-active' : '');
 
-    var html = '<div style="padding:12px 16px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center">'
-      + '<strong style="color:' + ACCENT + ';font-size:14px">OGP Debug</strong>'
-      + '<button id="' + CLOSE_ID + '" aria-label="Close OGP debug panel" style="background:none;border:none;color:#888;cursor:pointer;font-size:18px;padding:0 4px">&times;</button>'
+    var html = '<div class="zocp-ogp-header">'
+      + '<strong class="zocp-ogp-title">OGP Debug</strong>'
+      + '<button id="' + CLOSE_ID + '" class="zocp-ogp-close" aria-label="Close OGP debug panel">&times;</button>'
       + '</div>';
 
-    html += '<div style="padding:8px 16px;border-bottom:1px solid #333;display:flex;align-items:center;gap:6px">'
-      + '<span style="color:#888;font-size:11px;margin-right:4px">og:image</span>'
-      + '<button id="' + LOCAL_BTN_ID + '" style="' + (mode === 'local' ? btnActive : btnInactive) + '">Local</button>'
-      + '<button id="' + REMOTE_BTN_ID + '" style="' + (mode === 'remote' ? btnActive : btnInactive) + '">Remote</button>'
+    html += '<div class="zocp-ogp-modebar">'
+      + '<span class="zocp-ogp-modebar-label">og:image</span>'
+      + '<button id="' + LOCAL_BTN_ID + '" class="' + localCls + '">Local</button>'
+      + '<button id="' + REMOTE_BTN_ID + '" class="' + remoteCls + '">Remote</button>'
       + '</div>';
 
-    html += '<div style="padding:12px 16px">';
+    html += '<div class="zocp-ogp-body">';
 
     if (ogImage) {
-      html += '<div style="margin-bottom:12px;border-radius:4px;overflow:hidden;border:1px solid #333">'
-        + '<img src="' + escapeHtml(displayImage) + '" alt="OG image preview" style="width:100%;height:auto;display:block" />'
+      html += '<div class="zocp-ogp-image">'
+        + '<img class="zocp-ogp-image-img" src="' + escapeHtml(displayImage) + '" alt="OG image preview" />'
         + '</div>'
-        + '<div style="margin-bottom:8px;word-break:break-all;color:#888;font-size:11px">' + escapeHtml(displayImage) + '</div>';
+        + '<div class="zocp-ogp-image-url">' + escapeHtml(displayImage) + '</div>';
     } else {
-      html += '<div style="margin-bottom:12px;padding:24px;text-align:center;background:#111;border-radius:4px;color:#666">No og:image found</div>';
+      html += '<div class="zocp-ogp-image-empty">No og:image found</div>';
     }
 
     var fields = [
@@ -154,8 +162,8 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
 
     for (var i = 0; i < fields.length; i++) {
       if (fields[i][1]) {
-        html += '<div style="margin-bottom:6px">'
-          + '<span style="color:#888;font-size:11px">' + escapeHtml(fields[i][0]) + '</span><br>'
+        html += '<div class="zocp-ogp-field">'
+          + '<span class="zocp-ogp-field-key">' + escapeHtml(fields[i][0]) + '</span><br>'
           + '<span>' + escapeHtml(fields[i][1]) + '</span>'
           + '</div>';
       }
@@ -166,12 +174,12 @@ export function buildOgpDebugScript(config?: OgpDebugConfig): string {
 
     var extras = allMeta.filter(function(m) { return !shown[m.property]; });
     if (extras.length > 0) {
-      html += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid #333">'
-        + '<div style="color:#888;font-size:11px;margin-bottom:6px">Other meta tags</div>';
+      html += '<div class="zocp-ogp-extras">'
+        + '<div class="zocp-ogp-extras-label">Other meta tags</div>';
       for (var k = 0; k < extras.length; k++) {
-        html += '<div style="margin-bottom:4px">'
-          + '<span style="color:#888;font-size:11px">' + escapeHtml(extras[k].property) + '</span> '
-          + '<span style="font-size:12px">' + escapeHtml(extras[k].content) + '</span>'
+        html += '<div class="zocp-ogp-extra">'
+          + '<span class="zocp-ogp-extra-key">' + escapeHtml(extras[k].property) + '</span> '
+          + '<span class="zocp-ogp-extra-value">' + escapeHtml(extras[k].content) + '</span>'
           + '</div>';
       }
       html += '</div>';

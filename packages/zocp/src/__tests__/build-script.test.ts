@@ -15,8 +15,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { buildOgpDebugScript } from '../index';
+import { STYLESHEET } from '../styles';
 
 const PANEL_ID = 'zocp-ogp-debug-panel';
+const STYLE_ID = 'zocp-ogp-debug-panel-styles';
 const VISIBLE_KEY = 'zocp-ogp-debug-visible';
 const RESHOW_EVENT = 'test:reshow';
 
@@ -39,6 +41,7 @@ function runScript(script: string): void {
 
 function resetEnvironment(): void {
   document.getElementById(PANEL_ID)?.remove();
+  document.getElementById(STYLE_ID)?.remove();
   document.body.innerHTML = '';
   window.localStorage.clear();
   delete win.__ogpDebugInstalled;
@@ -189,5 +192,66 @@ describe('buildOgpDebugScript runtime contract', () => {
     });
 
     expect(script.toLowerCase()).not.toContain('</script');
+  });
+});
+
+describe('CSS encapsulation contract', () => {
+  it('injects a single guarded <style> and applies the panel-root class', () => {
+    runScript(buildOgpDebugScript());
+    win.zocp!.show();
+
+    const styles = document.querySelectorAll(`#${STYLE_ID}`);
+    expect(styles).toHaveLength(1);
+    expect(styles[0]!.tagName).toBe('STYLE');
+    expect(styles[0]!.parentElement).toBe(document.head);
+
+    const panel = document.getElementById(PANEL_ID)!;
+    expect(panel.classList.contains('zocp-ogp')).toBe(true);
+  });
+
+  it('maps the accentColor config to the --zocp-color-accent token inline on the root', () => {
+    runScript(buildOgpDebugScript({ accentColor: '#ff0000' }));
+    win.zocp!.show();
+
+    const panel = document.getElementById(PANEL_ID)!;
+    expect(panel.style.getPropertyValue('--zocp-color-accent')).toBe('#ff0000');
+  });
+
+  it('re-running show() (mode switch / observer refresh) keeps exactly ONE style and ONE root', () => {
+    runScript(buildOgpDebugScript());
+    // show() is the path that re-runs on mode switches, observer refreshes and
+    // reshow re-mounts — exercising it directly pins the <style> id guard.
+    win.zocp!.show();
+    win.zocp!.show();
+    win.zocp!.toggle(); // hide
+    win.zocp!.toggle(); // show again
+
+    expect(document.querySelectorAll(`#${STYLE_ID}`)).toHaveLength(1);
+    expect(document.querySelectorAll(`#${PANEL_ID}`)).toHaveLength(1);
+  });
+
+  it('invoking the generated script twice injects exactly ONE style and ONE root (idempotency)', () => {
+    // The install guard returns before reshowIfVisible() on the 2nd run, so a
+    // root only mounts via the auto-show path — set the visible flag first.
+    window.localStorage.setItem(VISIBLE_KEY, '1');
+    const script = buildOgpDebugScript();
+
+    runScript(script);
+    runScript(script);
+
+    expect(document.querySelectorAll(`#${STYLE_ID}`)).toHaveLength(1);
+    expect(document.querySelectorAll(`#${PANEL_ID}`)).toHaveLength(1);
+  });
+
+  it('declares tokens under the panel-root selector, never on :root', () => {
+    expect(STYLESHEET).not.toContain(':root');
+    expect(STYLESHEET).toContain(':where(.zocp-ogp)');
+  });
+
+  it('no-host-read gate: every var() reference is a --zocp-* token', () => {
+    const refs = [...STYLESHEET.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1]!);
+    expect(refs.length).toBeGreaterThan(0);
+    const nonZocp = refs.filter((name) => !name.startsWith('--zocp-'));
+    expect(nonZocp).toEqual([]);
   });
 });
