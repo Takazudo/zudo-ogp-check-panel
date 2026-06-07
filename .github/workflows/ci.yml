@@ -1,6 +1,12 @@
 name: CI
 
 on:
+  # Run on pushes to main so the release flow (l-make-release waits for CI on the
+  # bump commit) and the post-merge gate have a real CI run to watch — this repo
+  # has no deploy workflow, so CI itself is the only push-to-main check.
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
