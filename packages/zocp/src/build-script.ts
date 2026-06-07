@@ -1,5 +1,5 @@
-import type { OgpDebugConfig } from './types';
-import { STYLESHEET } from './styles';
+import type { OgpDebugConfig } from './types.js';
+import { STYLESHEET } from './styles.js';
 
 const DEFAULTS: Required<OgpDebugConfig> = {
   windowNamespace: 'zocp',
