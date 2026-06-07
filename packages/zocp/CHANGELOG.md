@@ -2,6 +2,16 @@
 
 All notable changes to `@takazudo/zudo-ogp-check-panel` will be documented here.
 
+## 0.1.1
+
+### Fixed
+
+- node16/nodenext typings: relative imports in the emitted `.d.ts` now carry `.js` extensions, so TypeScript consumers using `moduleResolution: node16`/`nodenext` resolve the types correctly (cleared `@arethetypeswrong/cli`'s `InternalResolutionError`). ([#10](https://github.com/Takazudo/zudo-ogp-check-panel/issues/10))
+
+### Other Changes
+
+- ci(release): publish via `npm publish --provenance` on Node 24 instead of `pnpm -r publish`, so releases carry an npm provenance attestation. ([#11](https://github.com/Takazudo/zudo-ogp-check-panel/issues/11))
+
 ## 0.1.0
 
 ### Features

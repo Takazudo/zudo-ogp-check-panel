@@ -1,6 +1,6 @@
 {
   "name": "@takazudo/zudo-ogp-check-panel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OGP check panel — framework-agnostic utility for inspecting OGP meta tags.",
   "private": false,
   "license": "MIT",
